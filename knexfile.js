@@ -22,7 +22,7 @@ module.exports = {
       directory: __dirname + '/db/seeds/test'
     },
     useNullAsDefault: true
-  }
+  },
 
   // staging: {
   //   client: 'postgresql',
