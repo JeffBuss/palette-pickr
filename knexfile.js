@@ -1,5 +1,3 @@
-// Update with your config settings.
-
 module.exports = {
 
   development: {
@@ -10,6 +8,18 @@ module.exports = {
     },
     seeds: {
       directory: './db/seeds/dev'
+    },
+    useNullAsDefault: true
+  },
+
+  test: {
+    client: 'pg',
+    connection: 'postgres://localhost/palettepickr_test',
+    migrations: {
+      directory: __dirname + '/db/migrations'
+    },
+    seeds: {
+      directory: __dirname + '/db/seeds/test'
     },
     useNullAsDefault: true
   }
@@ -29,7 +39,7 @@ module.exports = {
   //     tableName: 'knex_migrations'
   //   }
   // },
-  //
+
   // production: {
   //   client: 'postgresql',
   //   connection: {
