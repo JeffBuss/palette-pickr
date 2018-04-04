@@ -15,6 +15,15 @@ app.listen(app.get('port'), () => {                                             
   console.log(`Palette Picker running on localhost:${app.get('port')}.`);
 });
 
+const requireHTTPS = (request, response, next) => {
+  if (request.headers['x-forwarded-proto'] !== 'https') {
+    return response.redirect('https://' + request.get('host') + request.url);
+  }
+  next();
+};
+
+app.use(requireHTTPS);
+
 ///*///  GET ALL PROJECTS  ///*///
 app.get('/api/v1/projects', (request, response) => {                            //  GET all projects
   database('projects').select()                                                 //  Goes to postgres database and selects all projects
