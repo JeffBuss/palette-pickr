@@ -1,151 +1,399 @@
-const express = require('express');
-const app = express();
-const path = require('path');
-const bodyParser = require('body-parser');
-const environment = process.env.NODE_ENV || 'development';
-const configuration = require('./knexfile')[environment];
-const database = require('knex')(configuration);
-
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-
-app.listen(3000, () => {
-  console.log('Palette Picker running on localhost:3000');
+$(document).ready(() => {
+  pickNewColors();
+  displayProjects();
 });
 
-///*///  GET ALL PROJECTS  ///*///
-app.get('/api/v1/projects', (request, response) => {
-  database('projects').select()
-    .then((projects) => {
-      response.status(200).json(projects);
+//////////  FETCHES //////////
+
+const getAllProjects = async () => {
+  const projects = await fetch('/api/v1/projects', {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+  const jsonProjects = await projects.json();
+
+  return jsonProjects;
+}
+
+const createNewProject = async (name) => {
+  const projects = await fetch('/api/v1/projects', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      project_name: name
     })
-    .catch((error) => {
-      response.status(500).json({ error })
-    });
-});
+  });
+  if (projects.status !== 400) {
+    const jsonProjects = await projects.json();
 
-///*///  GET ALL PALETTES  ///*///
-app.get('/api/v1/palettes', (request, response) => {
-  database('palettes').select()
-    .then((palettes) => {
-      response.status(200).json(palettes);
-    })
-    .catch((error) => {
-      response.status(500).json({ error })
-    });
-});
-
-///*///  CREATE NEW PROJECT  ///*///
-app.post('/api/v1/projects', async (request, response) => {
-  const newProject = request.body;
-  const nameCheck = await database('projects').where('project_name', newProject.project_name).select();
-
-  if (Object.keys(nameCheck).length) {
-    return response.sendStatus(400).send({ error: 'Name taken' })
-  }
-
-  if (newProject) {
-    const newId = await database('projects').returning('id').insert(newProject)
-    const objToReturn = await database('projects').select()
-    return response.status(201).json(objToReturn)
+    return jsonProjects;
   } else {
-    return response.status(422).send({
-      error: "Project Name Required"
-    })
+    return 'Status: 400'
   }
-});
+}
 
-///*///  CREATE NEW PALETTE  ///*///
-app.post('/api/v1/palettes', async (request, response) => {
-  const newPalette = request.body;
+const createNewPalette = async (id, c1, c2, c3, c4, c5) => {
+  const palette = await fetch('/api/v1/palettes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      project_id: id,
+      color_1: c1,
+      color_2: c2,
+      color_3: c3,
+      color_4: c4,
+      color_5: c5
+    })
+  })
+  const jsonPalette = await palette.json();
 
-  if (newPalette) {
-    const newId = await database('palettes').returning('id').insert(newPalette)
-    const objToReturn = await database('palettes').where('id', newId[0]).select()
-    return response.status(201).json(objToReturn[0])
+  return jsonPalette;
+}
+
+const getPalettesByProjectId = async (id) => {
+  const palettes = await fetch(`/api/v1/palettes/${id}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+  const jsonPalettes = await palettes.json();
+
+  return jsonPalettes;
+}
+
+const removeProject = async (projId) => {
+  const project = await fetch(`/api/v1/projects/${projId}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+  const jsonProject = await project.json();
+
+  return jsonProject;
+}
+
+const updatePalette = async (palId, projId, name, c1, c2, c3, c4, c5) => {
+  const body = buildFetchBody(palId, projId, name, c1, c2, c3, c4, c5);
+  const palette = await fetch('/api/v1/palettes', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  })
+  const jsonPalette = await palette.json();
+
+  return jsonPalette;
+}
+
+buildFetchBody = (palId, projId, name, c1, c2, c3, c4, c5) => {
+  let body = {}
+
+  palId ? body.id = palId : null;
+  projId ? body.project_id = projId : null;
+  name ? body.palette_name = name : null;
+  c1 ? body.color_1 = c1 : null;
+  c2 ? body.color_2 = c2 : null;
+  c3 ? body.color_3 = c3 : null;
+  c4 ? body.color_4 = c4 : null;
+  c5 ? body.color_5 = c5 : null;
+  return body;
+}
+
+const deletePaletteByPaletteId = async (id) => {
+  const palettes = await fetch(`/api/v1/palettes/${id}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+  const jsonPalettes = await palettes.json();
+
+  return jsonPalettes;
+}
+
+//////////  CREATE FUNCTIONS  //////////
+
+pickNewColors = () => {
+  const brightnessArray = ["#000", "#fff"];
+
+  for(let i = 1; i <= 5; i++) {
+    if ($(`.color-${i}`).attr('data-locked') === 'false') {
+      const newColor = generateRandomHexCode();
+      const brightness = findBrightness(newColor);
+
+      $(`.color-${i}`).css('background-color', newColor);
+      $(`.hex-value-${i}`).text(newColor).css('color', brightnessArray[brightness])
+      $(`.lock-${i}`).attr('src', `assets/lock-open-${brightness}.svg`);
+    }
+  }
+}
+
+createProject = async () => {
+  const name = $('.new-project-input').val();
+  const projects = await createNewProject(name);
+
+  if (projects === 'Status: 400') {
+    $('.error-message').text('Name already taken.');
   } else {
-    return response.status(422).send({
-      error: "Palette Object Required"
-    })
+    $('.error-message').text('');
+    updateDropdown(projects);
+    displayProjectName(name);
+    $('.new-project-input').val('');
+    clearPalettes();
   }
-});
+}
 
-///*///  CREATE NEW PALETTE  ///*///
-app.post('/api/v1/palettes', async (request, response) => {
-  const newPalette = request.body;
+//////////  SAVE AND DELETE  //////////
 
-  if (newPalette) {
-    const newId = await database('palettes').returning('id').insert(newPalette)
-    const objToReturn = await database('palettes').where('id', newId[0]).select()
-    return response.status(201).json(objToReturn[0])
-  } else {
-    return response.status(422).send({
-      error: "Palette Object Required"
-    })
-  }
-});
-
-///*///  GET PALETTES BY PROJECT_ID  ///*///
-app.get('/api/v1/palettes/:project_id', async (request, response) => {
-  const { project_id } = request.params;
-
-  await database('palettes').where('project_id', project_id).select()
-    .then((palettes) => {
-      response.status(200).json(palettes);
-    })
-    .catch((error) => {
-      response.status(500).json({ error })
-    });
-});
-
-///*///  UPDATE PALETTE  ///*///
-app.put('/api/v1/palettes', async (request, response) => {
-  const { id } = request.body;
-  const updatePalette = request.body;
-
+savePalette = async () => {
+  const id = getCurrentProjectId();
   if (id) {
-    await database('palettes').where('id', id).update(updatePalette)
-    return response.status(201).json(updatePalette)
+    const color1 = $('.hex-value-1').text();
+    const color2 = $('.hex-value-2').text();
+    const color3 = $('.hex-value-3').text();
+    const color4 = $('.hex-value-4').text();
+    const color5 = $('.hex-value-5').text();
+    const newPalette = await createNewPalette(id, color1, color2, color3, color4, color5)
+
+    createPaletteInProject(newPalette.project_id, newPalette.id, color1, color2, color3, color4, color5);
   } else {
-    console.log(response)
-    return response.status(422).send({
-      error: "Palette Id Required"
-    })
+    $('.error-message').text('Please choose project name first.');
   }
-});
+}
 
-///*///  DELETE PROJECT BY ID ///*///
-app.delete('/api/v1/projects/:projId', async (request, response) => {
-  const { projId } = request.params;
+async function switchProjects() {
+  const name = $(this).val();
+  const id = getCurrentProjectId();
+  const projectPalettes = await getPalettesByProjectId(id);
 
-  if (projId) {
-    await database('palettes').where('project_id', projId).delete()
-    await database('projects').where('id', projId).delete()
-    return response.send({
-      success: `Project id ${projId} deleted`
-    })
+  clearPalettes();
+  displayProjectName(name);
+  displayPalettes(projectPalettes);
+}
+
+function deletePalette() {
+  const palId = $(this).closest('.palette-holder').attr('data-palId');
+
+  deletePaletteByPaletteId(palId);
+  $(this).closest('.palette-holder').remove();
+}
+
+deleteProject = async () => {
+  const id = getCurrentProjectId();
+  const projectList = await getAllProjects();
+  const newList = projectList.filter(project => {
+    return project.id !== parseInt(id);
+  })
+  const newId = getCurrentProjectId();
+
+  updateDropdown(newList);
+  removeProject(id);
+  if (newList.length) {
+    displayProjectName(newList[0].project_name)
+    displayTopProjectPalette(newList[0].id);
   } else {
-    return response.status(422).send({
-      error: "Project not found"
-    })
+    displayProjectName('');
+    clearPalettes();
   }
-});
+}
 
-///*///  DELETE PALETTE BY ID ///*///
-app.delete('/api/v1/palettes/:id', async (request, response) => {
-  const { id } = request.params;
+//////////  DISPLAY FUNCTIONS  //////////
 
-  if (id) {
-    await database('palettes').where('id', id).delete()
-    return response.send({
-      success: `Palette id ${id} deleted`
-    })
-  } else {
-    return response.status(422).send({
-      error: "Palette not found"
-    })
+displayProjectName = (name) => {
+  $('.project-name-span').text(name);
+  $('select').val(name);
+}
+
+displayTopProjectPalette = async (id) => {
+  const projectPalettes = await getPalettesByProjectId(id);
+
+  displayPalettes(projectPalettes);
+}
+
+function toggleLocked() {
+  if ($(this).attr('src') === 'assets/lock-open-0.svg') {
+    $(this).closest('div').attr('data-locked', true);
+    $(this).attr('src', 'assets/lock-0.svg');
+    return;
   }
-});
+  if ($(this).attr('src') === 'assets/lock-0.svg') {
+    $(this).closest('div').attr('data-locked', false);
+    $(this).attr('src', 'assets/lock-open-0.svg');
+    return;
+  }
+  if ($(this).attr('src') === 'assets/lock-open-1.svg') {
+    $(this).closest('div').attr('data-locked', true);
+    $(this).attr('src', 'assets/lock-1.svg');
+    return;
+  }
+  if ($(this).attr('src') === 'assets/lock-1.svg') {
+    $(this).closest('div').attr('data-locked', false);
+    $(this).attr('src', 'assets/lock-open-1.svg');
+    return;
+  }
+}
 
-module.exports = app;
+displayPalettes = (projectPalettes) => {
+  clearPalettes();
+  projectPalettes.forEach(palette => {
+    const projId = palette.project_id;
+    const palId = palette.id;
+    const name = palette.palette_name || 'palette name';
+    const c1 = palette.color_1;
+    const c2 = palette.color_2;
+    const c3 = palette.color_3;
+    const c4 = palette.color_4;
+    const c5 = palette.color_5;
+
+    $('.palette-block').append(`
+      <div class="palette-holder" data-id="${projId}" data-palId="${palId}">
+        <h5 class="palette-name-h5"><img class="pencil" src="assets/pencil.svg"></button>${name}</h5>
+        <div class="palette-colors-holder">
+          <div class="palette-color-1 palette-colors" style="background-color: ${c1}"></div>
+          <div class="palette-color-2 palette-colors" style="background-color: ${c2}"></div>
+          <div class="palette-color-3 palette-colors" style="background-color: ${c3}"></div>
+          <div class="palette-color-4 palette-colors" style="background-color: ${c4}"></div>
+          <div class="palette-color-5 palette-colors" style="background-color: ${c5}"></div>
+          <button class="delete-palette-button"><img class="trash" src="assets/trash.svg"</button>
+        </div>
+      </div>
+    `)
+  })
+}
+
+createPaletteInProject = (projId, palId, hex1, hex2, hex3, hex4, hex5) => {
+  $('.palette-block').append(`
+    <div class="palette-holder" data-id="${projId}" data-palId="${palId}">
+      <input class="palette-name-input" placeholder="name palette"></input>
+      <div class="palette-colors-holder">
+        <div class="palette-color-1 palette-colors" style="background-color: ${hex1}"></div>
+        <div class="palette-color-2 palette-colors" style="background-color: ${hex2}"></div>
+        <div class="palette-color-3 palette-colors" style="background-color: ${hex3}"></div>
+        <div class="palette-color-4 palette-colors" style="background-color: ${hex4}"></div>
+        <div class="palette-color-5 palette-colors" style="background-color: ${hex5}"></div>
+        <button class="delete-palette-button"><img class="trash" src="assets/trash.svg"</button>
+      </div>
+    </div>
+  `)
+}
+
+displayProjects = async () => {
+  const projects = await getAllProjects();
+
+  updateDropdown(projects);
+  if (projects.length) {
+    displayTopProjectPalette(projects[0].id);
+    displayProjectName(projects[0].project_name);
+  }
+}
+
+function addPaletteName() {
+  const name = $(this).val();
+  const palId = $(this).closest('.palette-holder').attr('data-palId');
+
+  $(this).replaceWith(`
+    <h5 class="palette-name-h5"><img class="pencil" src="assets/pencil.svg"></button>${name}</h5>
+  `)
+  updatePalette(palId, null, name);
+}
+
+function editPaletteName() {
+  const name = $(this).closest('.palette-name-h5').text();
+  const parent = $(this).closest('.palette-holder');
+
+  $(this).closest('.palette-name-h5').replaceWith(`
+    <input class="palette-name-input" placeholder="name palette" onfocus="this.setSelectionRange(this.value.length, this.value.length)" value="${name}"></input>
+  `)
+  parent.children('.palette-name-input').focus();
+}
+
+updateDropdown = (projects) => {
+  $('.project-dropdown').children().remove();
+  projects.forEach(project => {
+    $('.project-dropdown').append(`
+      <option class="dropdown-options" data-id="${project.id}">${project.project_name}</option>
+    `)
+  })
+}
+
+clearPalettes = () => {
+  $('.palette-holder').remove();
+}
+
+function sendToTop() {
+  let colorArray = []
+
+  for (let i = 0; i < 5; i++) {
+    colorArray.push(rgb2hex($(this).parent().children()[i].style.backgroundColor));
+  }
+  paletteToTop(colorArray);
+}
+
+paletteToTop = (colorArray) => {
+  const brightnessArray = ["#000", "#fff"];
+  for (let i = 0; i < 5; i++) {
+    const color = colorArray[i]
+    const brightness = findBrightness(colorArray[i]);
+    $(`.color-${i + 1}`).css('background-color', colorArray[i]);
+    $(`.hex-value-${i + 1}`).text(colorArray[i]).css('color', brightnessArray[brightness])
+    $(`.lock-${i + 1}`).attr('src', `assets/lock-open-${brightness}.svg`);
+  }
+}
+
+//////////  HELPERS  //////////
+
+findBrightness = (hex) => {
+  const array = hex.split('').slice(1, 7)
+  const nums = array.map(val => parseInt(val, 16));
+  let brightness = nums[0] + nums[2] + nums[4]
+
+  brightness < 20 ? brightness = 1 : brightness = 0;
+  return brightness;
+}
+
+generateRandomHexCode = () => {
+  const chars = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
+  let hexCode = ['#'];
+
+  for(let i = 0; i < 6; i++) {
+    const randomNum = Math.floor(Math.random() * 16);
+    hexCode.push(chars[randomNum]);
+  }
+  return hexCode.join('');
+}
+
+getCurrentProjectId = () => {
+  const id = $('select').find(':selected').attr('data-id');
+
+  return id;
+}
+
+rgb2hex = (rgb) => {
+  rgb = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+  hex = (x) => {
+    return ("0" + parseInt(x).toString(16)).slice(-2);
+  }
+  return "#" + hex(rgb[1]) + hex(rgb[2]) + hex(rgb[3]);
+}
+
+//////////  EVENT LISTENERS  //////////
+
+$('main').on('click', '.all-locks', toggleLocked);
+$('article').on('click', '.generate-button', pickNewColors);
+$('article').on('click', '.save-palette-button', savePalette);
+$('article').on('click', '.delete-palette-button', deletePalette);
+$('article').on('blur', '.palette-name-input', addPaletteName);
+$('article').on('click', '.pencil', editPaletteName);
+$('header').on('click', '.header-button', createProject);
+$('header').on('change', 'select', switchProjects);
+$('header').on('click', '.delete-project-button', deleteProject);
+$('article').on('click', '.palette-colors', sendToTop);
