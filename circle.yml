@@ -1,0 +1,24 @@
+machine:
+  timezone:
+    America/Denver
+
+  node:
+    version: 8.1.2
+
+environment:
+  DATABASE_URL: postgresql://ubuntu:@127.0.0.1:5432/palettepickr_test
+
+database:
+  override:
+    - sudo -u postgres psql -p 5432 -c "create database palettepickr_test;"
+    - knex migrate:latest
+
+test:
+  override:
+    - mocha --exit
+
+deployment:
+  staging:
+    branch: master
+    heroku:
+      appname: buss-palette-pickr
