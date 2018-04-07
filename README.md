@@ -13,4 +13,4 @@ Palette Pickr is a simple progressive web app for easily putting together color 
 * Mocha Chai
 
 
-Live version can be found at [hold on tight, will be deploying to a VPS once it's finished].
+Live version can be found on Heroku [HERE](https://buss-palette-pickr.herokuapp.com/) for the time being until I get around to deploying it to a VPS in a Docker container.
